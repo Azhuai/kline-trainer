@@ -248,6 +248,29 @@ def get_stock_next_training(stock_code, start_idx, length):
         "buy_hold_return": r2((klines[-1]['close'] - klines[0]['close']) / klines[0]['close'] * 100) if klines else 0
     }
 
+def get_stock_full_data(stock_code, length):
+    """获取个股全部数据用于模拟交易"""
+    df = load_stock_data(stock_code)
+    if df is None or len(df) < length + 100:
+        return None
+    
+    # 使用全部数据，从第100根开始（确保指标计算准确）
+    # 留出一些空间用于指标计算
+    start_idx = 100
+    max_length = len(df) - start_idx - 60  # 减去指标计算需要的前置数据
+    if max_length < length:
+        length = max_length
+    
+    klines = get_training_data(stock_code, start_idx, length)
+    if not klines:
+        return None
+    
+    return {
+        "code": stock_code,
+        "klines": klines,
+        "total": len(klines)
+    }
+
 def load_leaderboard():
     if os.path.exists(LEADERBOARD_FILE):
         with open(LEADERBOARD_FILE, 'r') as f:
@@ -316,6 +339,19 @@ class KlineHandler(SimpleHTTPRequestHandler):
             if data and blind:
                 data['blind_code'] = data['code']
                 data['code'] = '??????'
+            self.send_json(data)
+        elif path == '/api/stock_train':
+            stock_code = params.get('code', [None])[0]
+            length = int(params.get('length', ['60'])[0])
+            if not stock_code:
+                stocks = get_stock_list()
+                if stocks:
+                    stock = random.choice(stocks)
+                    stock_code = stock['code']
+                else:
+                    self.send_json({'error': 'No stocks available'})
+                    return
+            data = get_stock_full_data(stock_code, length)
             self.send_json(data)
         elif path == '/api/leaderboard':
             self.send_json(load_leaderboard())
