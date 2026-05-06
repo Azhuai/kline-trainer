@@ -68,6 +68,7 @@ def get_stock_list():
                     stocks.append({"code": f"{market}.{code}", "market": market, "name": code})
     return stocks
 
+    # 加载股票**日 K 线**数据
 def load_stock_data(code):
     """加载股票日线数据"""
     parts = code.split('.')
@@ -282,23 +283,24 @@ def save_leaderboard(data):
     with open(LEADERBOARD_FILE, 'w') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
-def add_score(name, score, mode, details=None):
+def add_score(name, score, mode, kl=60, details=None):
     board = load_leaderboard()
     entry = {"name": name, "score": score, "time": datetime.now().isoformat(), "details": details or {}}
     
-    for category in ['daily', 'weekly', 'monthly', 'all_time', 'blind_test']:
-        if category not in board:
-            board[category] = []
-        existing = next((e for e in board[category] if e['name'] == name), None)
-        if existing:
-            if score > existing['score']:
-                existing['score'] = score
-                existing['time'] = entry['time']
-                existing['details'] = details
-        else:
-            board[category].append(entry.copy())
-        board[category].sort(key=lambda x: x['score'], reverse=True)
-        board[category] = board[category][:100]
+    # 生成分类键：mode_kl (如 train_60, stock_30, stockblind_0)
+    key = f"{mode}_{kl}"
+    if key not in board:
+        board[key] = []
+    existing = next((e for e in board[key] if e['name'] == name), None)
+    if existing:
+        if score > existing['score']:
+            existing['score'] = score
+            existing['time'] = entry['time']
+            existing['details'] = details
+    else:
+        board[key].append(entry.copy())
+    board[key].sort(key=lambda x: x['score'], reverse=True)
+    board[key] = board[key][:100]
     
     save_leaderboard(board)
     return board
@@ -369,18 +371,18 @@ class KlineHandler(SimpleHTTPRequestHandler):
             
             name = data.get('name', 'Anonymous')
             score = data.get('score', 0)
-            mode = data.get('mode', 'daily')
-            blind = data.get('blind', False)
+            mode = data.get('mode', 'train')
+            kl = int(data.get('kl', 60))
+            blind = str(data.get('blind', 'false')).lower() == 'true'
             
             details = {
-                "mode": mode, "blind": blind,
+                "mode": mode, "blind": blind, "kl": kl,
                 "total": data.get('total', 0),
                 "correct": data.get('correct', 0),
                 "stock": data.get('stock', '')
             }
             
-            category = 'blind_test' if blind else mode
-            board = add_score(name, score, category, details)
+            board = add_score(name, score, mode, kl, details)
             self.send_json({"success": True, "leaderboard": board})
         else:
             self.send_error(404)
