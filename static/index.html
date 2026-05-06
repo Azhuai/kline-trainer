@@ -70,6 +70,8 @@ select,input{background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:5
 <div class="modes">
 <button class="mbtn on" onclick="swM('train')">📊 训练</button>
 <button class="mbtn" onclick="swM('blind')">🔍 盲测</button>
+<button class="mbtn" onclick="swM('stock')">📈 个股训练</button>
+<button class="mbtn" onclick="swM('stockblind')">🔍 个股盲测</button>
 <button class="mbtn" onclick="swM('board')">🏆 排行榜</button>
 </div>
 <div class="row" id="vTrain">
@@ -126,7 +128,7 @@ select,input{background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:5
 </div>
 </div>
 <script>
-var S={bl:false,d:null,a:null,x:false,t:0,c:0,s:0,p:0,n:0,g:10,h:[],ch:'',ct:null,si:'kdj'};
+var S={bl:false,d:null,a:null,x:false,t:0,c:0,s:0,p:0,n:0,g:10,h:[],ch:'',ct:null,si:'kdj',stockMode:false,stockCode:'',stockIdx:0};
 function r2(v){return v==null||isNaN(v)?'0.00':Number(v).toFixed(2)}
 function fv(v){return v>=1e8?(v/1e8).toFixed(2)+'亿':v>=1e4?(v/1e4).toFixed(2)+'万':String(v)}
 function api(p,q){var u='/api/'+p;if(q){var s=new URLSearchParams(q).toString();if(s)u+='?'+s}return fetch(u).then(function(r){return r.json()})}
@@ -211,6 +213,25 @@ document.getElementById('bN').style.display='none';
 var l=+document.getElementById('sL').value;
 var iv=document.getElementById('sI').value.trim();
 var sc=ov||iv||undefined;
+if(S.stockMode){
+if(!S.stockCode){alert('请输入股票代码');return}
+api('stock_next',{code:S.stockCode,length:l,index:S.stockIdx,blind:S.bl}).then(function(d){
+if(!d||!d.klines||!d.klines.length){alert('该股票数据不足或已训练完毕');return}
+S.d=d;S.a=d.answer;S.ch=d.blind_code||d.code;
+S.stockIdx=d.next_idx||S.stockIdx+1;
+document.getElementById('dC').textContent=d.code;
+document.getElementById('dB').style.display=S.bl?'inline':'none';
+document.getElementById('dD').textContent=d.klines[0].date+' ~ '+d.klines[d.klines.length-1].date;
+var lk=d.klines[d.klines.length-1];
+var cp=0;if(d.klines.length>1){var pk=d.klines[d.klines.length-2];cp=(lk.close-pk.close)/pk.close*100}
+var cs=cp>=0?'+'+r2(cp)+'%':r2(cp)+'%';
+var cc=cp>=0?'#ef4444':'#22c55e';
+document.getElementById('dP').innerHTML=r2(lk.close)+' <span style="color:'+cc+';font-size:.7em">'+cs+'</span>';
+var br=d.buy_hold_return||0;
+document.getElementById('bR').innerHTML='<span class="'+(br>=0?'up':'dn')+'">'+(br>=0?'+':'')+r2(br)+'%</span>';
+draw(d.klines,null)
+})
+}else{
 api('random',{length:l,blind:S.bl,code:sc}).then(function(d){
 if(!d||!d.klines||!d.klines.length){alert('获取数据失败');return}
 S.d=d;S.a=d.answer;S.ch=d.blind_code||d.code;
@@ -226,6 +247,7 @@ var br=d.buy_hold_return||0;
 document.getElementById('bR').innerHTML='<span class="'+(br>=0?'up':'dn')+'">'+(br>=0?'+':'')+r2(br)+'%</span>';
 draw(d.klines,null)
 })
+}
 }
 function act(a){
 if(S.x||!S.a)return;
@@ -260,8 +282,20 @@ S.h.unshift({c:S.ch,ok:ok,a:a,d:dir,chg:S.a.change_pct,bh:S.d.buy_hold_return});
 uUI();save();
 if(S.n>=S.g)setTimeout(showSubmit,500)
 }
-function nxt(){go()}
-function chg(){document.getElementById('sI').value='';go()}
+function nxt(){
+if(S.stockMode){
+go()
+}else{
+go()
+}
+}
+function chg(){
+document.getElementById('sI').value='';
+S.stockMode=false;
+S.stockCode='';
+S.stockIdx=0;
+go()
+}
 function uUI(){
 document.getElementById('sT').textContent=S.t;
 document.getElementById('sR').textContent=S.t?Math.round(S.c/S.t*100)+'%':'0%';
@@ -284,7 +318,18 @@ function swM(m){
 document.querySelectorAll('.mbtn').forEach(function(b){b.classList.remove('on')});
 event.target.classList.add('on');
 if(m==='board'){document.getElementById('vTrain').style.display='none';document.getElementById('vBoard').style.display='flex';ldB('daily')}
-else{document.getElementById('vTrain').style.display='flex';document.getElementById('vBoard').style.display='none';S.bl=m==='blind';go()}
+else{
+document.getElementById('vTrain').style.display='flex';document.getElementById('vBoard').style.display='none';
+S.bl=(m==='blind'||m==='stockblind');
+S.stockMode=(m==='stock'||m==='stockblind');
+if(S.stockMode){
+var iv=document.getElementById('sI').value.trim();
+if(!iv){alert('请输入股票代码');return}
+S.stockCode=iv;
+S.stockIdx=0;
+}
+go()
+}
 }
 function ldB(cat,btn){
 if(btn){btn.parentElement.querySelectorAll('.mbtn').forEach(function(b){b.classList.remove('on')});btn.classList.add('on')}

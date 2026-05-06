@@ -204,6 +204,50 @@ def get_random_training(length, stock_code=None):
         "buy_hold_return": r2((klines[-1]['close'] - klines[0]['close']) / klines[0]['close'] * 100) if klines else 0
     }
 
+def get_stock_next_training(stock_code, start_idx, length):
+    """获取个股连续训练数据"""
+    df = load_stock_data(stock_code)
+    if df is None or len(df) < start_idx + length + 1:
+        return None
+    
+    # 确保起始索引有效
+    if start_idx < 100:
+        start_idx = 100
+    
+    # 检查是否超出数据范围
+    if start_idx + length >= len(df):
+        return None
+    
+    klines = get_training_data(stock_code, start_idx, length)
+    if not klines:
+        return None
+    
+    # 答案（下一根K线）
+    answer_idx = start_idx + length
+    answer = None
+    if answer_idx < len(df):
+        row = df.iloc[answer_idx]
+        prev_close = klines[-1]['close']
+        answer = {
+            "date": str(row['date']),
+            "open": r2(float(row['open'])),
+            "close": r2(float(row['close'])),
+            "high": r2(float(row['high'])),
+            "low": r2(float(row['low'])),
+            "direction": "up" if row['close'] >= prev_close else "down",
+            "change_pct": r2(abs(row['close'] - prev_close) / prev_close * 100)
+        }
+    
+    return {
+        "code": stock_code,
+        "klines": klines,
+        "answer": answer,
+        "start_idx": start_idx,
+        "next_idx": start_idx + 1,
+        "total_len": len(df),
+        "buy_hold_return": r2((klines[-1]['close'] - klines[0]['close']) / klines[0]['close'] * 100) if klines else 0
+    }
+
 def load_leaderboard():
     if os.path.exists(LEADERBOARD_FILE):
         with open(LEADERBOARD_FILE, 'r') as f:
@@ -250,6 +294,19 @@ class KlineHandler(SimpleHTTPRequestHandler):
             stock_code = params.get('code', [None])[0]
             blind = params.get('blind', ['false'])[0] == 'true'
             data = get_random_training(length, stock_code)
+            if data and blind:
+                data['blind_code'] = data['code']
+                data['code'] = '??????'
+            self.send_json(data)
+        elif path == '/api/stock_next':
+            stock_code = params.get('code', [None])[0]
+            length = int(params.get('length', ['60'])[0])
+            index = int(params.get('index', ['0'])[0])
+            blind = params.get('blind', ['false'])[0] == 'true'
+            if not stock_code:
+                self.send_json({'error': 'Missing stock code'})
+                return
+            data = get_stock_next_training(stock_code, index, length)
             if data and blind:
                 data['blind_code'] = data['code']
                 data['code'] = '??????'
