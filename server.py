@@ -303,9 +303,15 @@ class KlineHandler(SimpleHTTPRequestHandler):
             length = int(params.get('length', ['60'])[0])
             index = int(params.get('index', ['0'])[0])
             blind = params.get('blind', ['false'])[0] == 'true'
+            # 如果没有指定股票，随机选一个
             if not stock_code:
-                self.send_json({'error': 'Missing stock code'})
-                return
+                stocks = get_stock_list()
+                if stocks:
+                    stock = random.choice(stocks)
+                    stock_code = stock['code']
+                else:
+                    self.send_json({'error': 'No stocks available'})
+                    return
             data = get_stock_next_training(stock_code, index, length)
             if data and blind:
                 data['blind_code'] = data['code']
