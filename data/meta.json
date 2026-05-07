@@ -1,6 +1,5 @@
 {
-  "update_time": "2026-05-06T20:58:38.936820",
-  "stocks_5min": 64,
+  "update_time": "2026-05-07T07:25:04.098959",
   "stocks_daily": 65,
   "stock_list": [
     "sh.600000",
@@ -68,5 +67,7 @@
     "sz.300124",
     "sz.300750",
     "sz.300760"
-  ]
+  ],
+  "data_type": "日 K 线",
+  "data_period": "最近 5 年"
 }
