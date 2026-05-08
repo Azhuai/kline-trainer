@@ -21,22 +21,28 @@ def r2(x):
         return 0.0
     return round(float(x), 2)
 
+def r4(x):
+    """保留4位小数（用于中间计算）"""
+    if pd.isna(x) or x is None:
+        return 0.0
+    return round(float(x), 4)
+
 def calc_ma(series, window):
     """移动平均线"""
-    return series.rolling(window=window, min_periods=1).mean().apply(r2)
+    return series.rolling(window=window, min_periods=1).mean().apply(r4)
 
 def calc_ema(series, span):
     """指数移动平均"""
-    return series.ewm(span=span, adjust=False).mean().apply(r2)
+    return series.ewm(span=span, adjust=False).mean().apply(r4)
 
 def calc_macd(close, fast=12, slow=26, signal=9):
     """MACD"""
     ema_fast = close.ewm(span=fast, adjust=False).mean()
     ema_slow = close.ewm(span=slow, adjust=False).mean()
-    dif = (ema_fast - ema_slow).apply(r2)
-    dea = dif.ewm(span=signal, adjust=False).mean().apply(r2)
-    macd = ((dif - dea) * 2).apply(r2)
-    return dif, dea, macd
+    dif = ema_fast - ema_slow
+    dea = dif.ewm(span=signal, adjust=False).mean()
+    macd = (dif - dea) * 2
+    return dif.apply(r4), dea.apply(r4), macd.apply(r4)
 
 def calc_kdj(high, low, close, n=9, m1=3, m2=3):
     """KDJ"""
@@ -48,12 +54,12 @@ def calc_kdj(high, low, close, n=9, m1=3, m2=3):
     d = k.ewm(com=2, adjust=False).mean()
     j = (3 * k - 2 * d)
     
-    return k.apply(r2), d.apply(r2), j.apply(r2)
+    return k.apply(r4), d.apply(r4), j.apply(r4)
 
 def calc_dma(close, short=10, long=50, m=10):
     """DMA"""
-    dma = (calc_ma(close, short) - calc_ma(close, long)).apply(r2)
-    ama = calc_ma(dma, m).apply(r2)
+    dma = (calc_ma(close, short) - calc_ma(close, long)).apply(r4)
+    ama = calc_ma(dma, m).apply(r4)
     return dma, ama
 
 def get_stock_list():
@@ -125,12 +131,8 @@ def get_training_data(code, start_idx, length):
     result = segment.iloc[60:].copy().reset_index(drop=True)
     result = result.fillna(0)
     
-    # 确保所有数值2位小数
-    num_cols = ['open', 'high', 'low', 'close', 'ma5', 'ma10', 'ma20', 'ma30',
-                'macd_dif', 'macd_dea', 'macd_bar', 'kdj_k', 'kdj_d', 'kdj_j', 'dma', 'dma_ama']
-    for col in num_cols:
-        if col in result.columns:
-            result[col] = result[col].apply(r2)
+    # 不提前四舍五入，保持高精度计算指标
+    # 最终输出时才四舍五入
     
     records = []
     for _, row in result.iterrows():
