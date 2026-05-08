@@ -99,8 +99,8 @@ select,input{background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:5
 <div class="right">
 <div class="card">
 <div class="card-t">🎯 预测操作</div>
+<div style="color:#8b949e;font-size:.85em;margin-bottom:8px">📌 已在 <b id="bBuyDate">--</b> 买入 <b id="bBuyPrice">--</b></div>
 <div class="btns">
-<button class="abtn bb" id="bBuy" onclick="act('buy')">📈 买入</button>
 <button class="abtn bs" id="bSell" onclick="act('sell')">📉 卖出</button>
 <button class="abtn bh" id="bHold" onclick="act('hold')">⏸️ 持有</button>
 </div>
@@ -211,7 +211,7 @@ function api(p,q){var u='/api/'+p;if(q){var s=new URLSearchParams(q).toString();
 function apiPost(p,d){return fetch('/api/'+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)}).then(function(r){return r.json()})}
 
 // ===== 训练模式状态 =====
-var T={bl:false,d:null,a:null,x:false,t:0,c:0,s:0,p:0,n:0,g:10,h:[],ch:'',ct:null,si:'kdj'};
+var T={bl:false,d:null,a:null,x:false,t:0,c:0,s:0,p:0,n:0,g:10,h:[],ch:'',ct:null,si:'kdj',buyPoint:null};
 function isBlind(){return T.bl}
 
 // 切换副指标
@@ -219,7 +219,16 @@ function swI(si){
 T.si=si;
 document.getElementById('indKDJ').className=si==='kdj'?'mbtn on':'mbtn';
 document.getElementById('indDMA').className=si==='dma'?'mbtn on':'mbtn';
-if(T.d&&T.d.klines)drawK(T.ct,T.d.klines,T.si);
+if(T.d&&T.d.klines){
+var marks=T.buyPoint?[{date:T.buyPoint.date,price:T.buyPoint.price,type:'buy'}]:[];
+drawK(T.ct,T.d.klines,T.si,marks);
+}
+// 同步更新个股模式图表
+if(ST.ct&&ST.klines&&ST.klines.length){
+var show=ST.klines.slice(0,ST.curDay);
+var marks=ST.trades.filter(function(t){return t.action==='buy'||t.action==='sell'}).map(function(t){return{date:t.date,price:t.price,type:t.action}});
+drawK(ST.ct,show,T.si,marks);
+}
 }
 
 // ===== 个股模式状态 =====
@@ -233,7 +242,7 @@ window.onresize=function(){T.ct&&T.ct.resize();ST.ct&&ST.ct.resize()}
 }
 
 // ===== 绘制K线（带参考线）=====
-function drawK(ct,ks,si){
+function drawK(ct,ks,si,marks){
 if(!ks||!ks.length)return;
 var dt=ks.map(function(k){return k.date});
 var oh=ks.map(function(k){return[k.open,k.close,k.low,k.high]});
@@ -285,7 +294,7 @@ yAxis:[
 ],
 dataZoom:[{type:'inside',xAxisIndex:[0,1,2,3],start:0,end:100}],
 series:[
-{name:'K',type:'candlestick',data:oh,xAxisIndex:0,yAxisIndex:0,itemStyle:{color:'#ef4444',color0:'#22c55e',borderColor:'#ef4444',borderColor0:'#22c55e'}},
+{name:'K',type:'candlestick',data:oh,xAxisIndex:0,yAxisIndex:0,itemStyle:{color:'#ef4444',color0:'#22c55e',borderColor:'#ef4444',borderColor0:'#22c55e'},markLine:{silent:true,symbol:'none',data:(marks||[]).map(function(m){var isB=m.type==='buy';return{xAxis:m.date,label:{show:true,formatter:isB?'B':'S',position:'end',color:isB?'#ef4444':'#22c55e',fontSize:12,fontWeight:'bold',offset:[0,4]},lineStyle:{color:'rgba(255,255,255,0.15)',width:1,type:'dotted'}}})}},
 {name:'MA5',type:'line',data:ks.map(function(k){return k.ma5}),smooth:true,sampling:'average',symbol:'none',xAxisIndex:0,yAxisIndex:0,itemStyle:{color:'#60a5fa'},lineStyle:{width:1.5}},
 {name:'MA10',type:'line',data:ks.map(function(k){return k.ma10}),smooth:true,sampling:'average',symbol:'none',xAxisIndex:0,yAxisIndex:0,itemStyle:{color:'#f59e0b'},lineStyle:{width:1.5}},
 {name:'MA20',type:'line',data:ks.map(function(k){return k.ma20}),smooth:true,sampling:'average',symbol:'none',xAxisIndex:0,yAxisIndex:0,itemStyle:{color:'#a855f7'},lineStyle:{width:1.5}},
@@ -296,6 +305,7 @@ markLine:{silent:true,symbol:'none',data:[{yAxis:maxVol,label:{formatter:'最大
 {name:'DEA',type:'line',data:ks.map(function(k){return k.macd_dea}),smooth:true,symbol:'none',xAxisIndex:2,yAxisIndex:2,itemStyle:{color:'#f59e0b'},lineStyle:{width:1.5}},
 {name:'MACD',type:'bar',data:ks.map(function(k){return{value:k.macd_bar,itemStyle:{color:k.macd_bar>=0?'#ef4444':'#22c55e'}}}),xAxisIndex:2,yAxisIndex:2,
 markLine:{silent:true,symbol:'none',data:[{yAxis:0,label:{formatter:'0',position:'end',color:'#8b949e',fontSize:9},lineStyle:{color:'#4b5563',type:'solid',width:1}},{yAxis:maxMacd,label:{formatter:r2(maxMacd),position:'end',color:'#8b949e',fontSize:9},lineStyle:{color:'#4b5563',type:'dashed',width:1}},{yAxis:halfMacd,label:{formatter:r2(halfMacd),position:'end',color:'#8b949e',fontSize:9},lineStyle:{color:'#4b5563',type:'dashed',width:1}},{yAxis:-maxMacd,label:{formatter:r2(-maxMacd),position:'end',color:'#8b949e',fontSize:9},lineStyle:{color:'#4b5563',type:'dashed',width:1}},{yAxis:-halfMacd,label:{formatter:r2(-halfMacd),position:'end',color:'#8b949e',fontSize:9},lineStyle:{color:'#4b5563',type:'dashed',width:1}}]}}
+
 ].concat(ss)
 },true)
 }
@@ -303,7 +313,6 @@ markLine:{silent:true,symbol:'none',data:[{yAxis:0,label:{formatter:'0',position
 // ===== 训练模式 =====
 function go(ov){
 T.x=false;T.a=null;
-document.getElementById('bBuy').disabled=false;
 document.getElementById('bSell').disabled=false;
 document.getElementById('bHold').disabled=false;
 document.getElementById('rBox').className='res';
@@ -325,38 +334,60 @@ var cc=cp>=0?'#ef4444':'#22c55e';
 document.getElementById('dP').innerHTML=r2(lk.close)+' <span style="color:'+cc+';font-size:.7em">'+cs+'</span>';
 var br=d.buy_hold_return||0;
 document.getElementById('bR').innerHTML='<span class="'+(br>=0?'up':'dn')+'">'+(br>=0?'+':'')+r2(br)+'%</span>';
-drawK(T.ct,d.klines,T.si)
+// 选择买入点：倒数第3-5天
+var buyOffset=Math.min(3+Math.floor(Math.random()*3),d.klines.length-2);
+var buyIdx=d.klines.length-1-buyOffset;
+var buyKline=d.klines[buyIdx];
+T.buyPoint={idx:buyIdx,date:buyKline.date,price:buyKline.close};
+// 显示买入信息
+document.getElementById('bBuyDate').textContent=buyKline.date;
+document.getElementById('bBuyPrice').textContent=r2(buyKline.close);
+// 绘制K线并标记买入点
+var marks=[{date:buyKline.date,price:buyKline.close,type:'buy'}];
+drawK(T.ct,d.klines,T.si,marks)
 })
 }
 function act(a){
 if(T.x||!T.a)return;
 T.x=true;
-document.getElementById('bBuy').disabled=true;
 document.getElementById('bSell').disabled=true;
 document.getElementById('bHold').disabled=true;
-var dir=T.a.direction;
+// 买入价和当前价
+var buyPrice=T.buyPoint.price;
+var curPrice=T.a.close;
+var pnl=(curPrice-buyPrice)/buyPrice*100;
+// 卖出时：跌了=正确，涨了=错误
+// 持有时：涨了=正确，跌了=错误
+var priceDown=curPrice<buyPrice;
 var ok=false;
-if(a==='buy')ok=dir==='up';
-else if(a==='sell')ok=dir==='down';
-else ok=true;
-T.t++;if(ok&&a!=='hold'){T.c++;T.s++;T.p+=10+T.s*2}else if(!ok)T.s=0;
+if(a==='sell')ok=priceDown;
+else ok=!priceDown;
+T.t++;if(ok){T.c++;T.s++;T.p+=10+T.s*2}else{T.s=0};
 T.n++;
+// 保存当前缩放状态
+var zoomStart=0,zoomEnd=100;
+try{var opt=T.ct.getOption();if(opt&&opt.dataZoom&&opt.dataZoom[0]){zoomStart=opt.dataZoom[0].start;zoomEnd=opt.dataZoom[0].end}}catch(e){}
+// 标记买入点+卖出点
+var marks=[{date:T.buyPoint.date,price:T.buyPoint.price,type:'buy'}];
+if(a==='sell')marks.push({date:T.a.date,price:T.a.close,type:'sell'});
 var ak={date:T.a.date,open:T.a.open,close:T.a.close,high:T.a.high,low:T.a.low,volume:0,ma5:null,ma10:null,ma20:null,ma30:null,macd_dif:0,macd_dea:0,macd_bar:0,kdj_k:0,kdj_d:0,kdj_j:0,dma:0,dma_ama:0};
-drawK(T.ct,T.d.klines.concat([ak]),T.si);
+drawK(T.ct,T.d.klines.concat([ak]),T.si,marks);
+// 恢复缩放状态
+if(zoomStart!==0||zoomEnd!==100)T.ct.dispatchAction({type:'dataZoom',start:zoomStart,end:zoomEnd});
 var pe=document.getElementById('dP');
-var ac=dir==='up'?'#ef4444':'#22c55e';
-pe.innerHTML=r2(T.a.close)+' <span style="color:'+ac+';font-size:.7em">'+(dir==='up'?'+':'')+r2(T.a.change_pct)+'%</span>';
+var ac=pnl>=0?'#ef4444':'#22c55e';
+pe.innerHTML=r2(T.a.close)+' <span style="color:'+ac+';font-size:.7em">'+(pnl>=0?'+':'')+r2(pnl)+'%</span>';
 var rb=document.getElementById('rBox');
 rb.className='res show '+(ok?'ok':'no');
 document.getElementById('rI').textContent=ok?'✅':'❌';
 var msg='';
-if(a==='hold')msg='持有观望';
-else msg=(a==='buy'?'买入':'卖出')+(ok?'正确！':'错误！');
+if(a==='sell')msg='卖出'+(ok?'正确！盈利'+r2(pnl)+'%':'错误！错过上涨'+r2(pnl)+'%');
+else msg='持有'+(ok?'正确！享受上涨'+r2(pnl)+'%':'错误！回撤'+r2(pnl)+'%');
 document.getElementById('rT').textContent=msg;
-document.getElementById('rD').textContent='变化:'+r2(T.a.change_pct)+'% | 买入持有:'+r2(T.d.buy_hold_return)+'%';
+document.getElementById('rD').textContent='买入价:'+r2(buyPrice)+' → 当前价:'+r2(curPrice)+' | 收益:'+r2(pnl)+'%';
 document.getElementById('bN').style.display='block';
 if(T.bl){document.getElementById('dC').textContent=T.ch;document.getElementById('dB').style.display='none'}
-T.h.unshift({c:T.ch,ok:ok,a:a,d:dir,chg:T.a.change_pct,bh:T.d.buy_hold_return});
+T.h.unshift({c:T.ch,ok:ok,a:a,d:a==='sell'?'down':'up',chg:pnl,bh:T.d.buy_hold_return});
 uUI();save();
 if(T.n>=T.g)setTimeout(showSubmit,500)
 }
@@ -417,8 +448,15 @@ stockUpdateUI()
 }
 function stockShowChart(){
 if(!ST.ct)ST.ct=echarts.init(document.getElementById('chart2'),'dark');
+// 保存当前缩放状态
+var zoomStart=0,zoomEnd=100;
+try{var opt=ST.ct.getOption();if(opt&&opt.dataZoom&&opt.dataZoom[0]){zoomStart=opt.dataZoom[0].start;zoomEnd=opt.dataZoom[0].end}}catch(e){}
 var show=ST.klines.slice(0,ST.curDay);
-drawK(ST.ct,show,T.si);
+// 构建买卖标记
+var marks=ST.trades.filter(function(t){return t.action==='buy'||t.action==='sell'}).map(function(t){return{date:t.date,price:t.price,type:t.action}});
+drawK(ST.ct,show,T.si,marks);
+// 恢复缩放状态
+if(zoomStart!==0||zoomEnd!==100)ST.ct.dispatchAction({type:'dataZoom',start:zoomStart,end:zoomEnd});
 if(!show.length)return;
 var lk=show[show.length-1];
 var cp=0;if(show.length>1){var pk=show[show.length-2];cp=(lk.close-pk.close)/pk.close*100}
