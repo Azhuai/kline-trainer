@@ -292,7 +292,7 @@ yAxis:[
 {scale:true,gridIndex:2,splitLine:{show:false},axisLabel:{color:'#8b949e',fontSize:9},axisLine:{lineStyle:{color:'#30363d'}}},
 {scale:true,gridIndex:3,splitLine:{lineStyle:{color:'#21262d',type:'dashed'}},axisLabel:{color:'#8b949e',fontSize:9},axisLine:{lineStyle:{color:'#30363d'}}}
 ],
-dataZoom:[{type:'inside',xAxisIndex:[0,1,2,3],start:0,end:100}],
+dataZoom:[{type:'inside',xAxisIndex:[0,1,2,3],startValue:dt.length>60?dt[dt.length-60]:dt[0],endValue:dt[dt.length-1],minSpan:5}],
 series:[
 {name:'K',type:'candlestick',data:oh,xAxisIndex:0,yAxisIndex:0,itemStyle:{color:'#ef4444',color0:'#22c55e',borderColor:'#ef4444',borderColor0:'#22c55e'},markLine:{silent:true,symbol:'none',data:(marks||[]).map(function(m){var isB=m.type==='buy';return{xAxis:m.date,label:{show:true,formatter:isB?'B':'S',position:'end',color:isB?'#ef4444':'#22c55e',fontSize:12,fontWeight:'bold',offset:[0,4]},lineStyle:{color:'rgba(255,255,255,0.15)',width:1,type:'dotted'}}})}},
 {name:'MA5',type:'line',data:ks.map(function(k){return k.ma5}),smooth:true,sampling:'average',symbol:'none',xAxisIndex:0,yAxisIndex:0,itemStyle:{color:'#60a5fa'},lineStyle:{width:1.5}},
@@ -448,15 +448,10 @@ stockUpdateUI()
 }
 function stockShowChart(){
 if(!ST.ct)ST.ct=echarts.init(document.getElementById('chart2'),'dark');
-// 保存当前缩放状态
-var zoomStart=0,zoomEnd=100;
-try{var opt=ST.ct.getOption();if(opt&&opt.dataZoom&&opt.dataZoom[0]){zoomStart=opt.dataZoom[0].start;zoomEnd=opt.dataZoom[0].end}}catch(e){}
 var show=ST.klines.slice(0,ST.curDay);
 // 构建买卖标记
 var marks=ST.trades.filter(function(t){return t.action==='buy'||t.action==='sell'}).map(function(t){return{date:t.date,price:t.price,type:t.action}});
 drawK(ST.ct,show,T.si,marks);
-// 恢复缩放状态
-if(zoomStart!==0||zoomEnd!==100)ST.ct.dispatchAction({type:'dataZoom',start:zoomStart,end:zoomEnd});
 if(!show.length)return;
 var lk=show[show.length-1];
 var cp=0;if(show.length>1){var pk=show[show.length-2];cp=(lk.close-pk.close)/pk.close*100}
