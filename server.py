@@ -14,6 +14,7 @@ import numpy as np
 
 QLIB_DIR = os.path.expanduser("~/.qlib/qlib_data/cn_data/stock")
 LEADERBOARD_FILE = os.path.join(os.path.dirname(__file__), "data", "leaderboard.json")
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 def r2(x):
     """保留2位小数"""
@@ -76,11 +77,15 @@ def get_stock_list():
 
     # 加载股票**日 K 线**数据
 def load_stock_data(code):
-    """加载股票日线数据"""
+    """加载股票日线数据，支持 sh.600000 和 600000.SH 两种格式"""
     parts = code.split('.')
     if len(parts) != 2:
         return None
-    market, stock_code = parts
+    # 自动识别格式：sh.600000 或 600000.SH
+    if parts[0].lower() in ('sh', 'sz'):
+        market, stock_code = parts[0].lower(), parts[1]
+    else:
+        stock_code, market = parts[0], parts[1].lower()
     csv_path = os.path.join(QLIB_DIR, market, stock_code, f"{stock_code}.csv")
     if not os.path.exists(csv_path):
         return None
@@ -96,7 +101,13 @@ def load_stock_data(code):
 def get_training_data(code, start_idx, length):
     """获取训练数据（带技术指标）"""
     df = load_stock_data(code)
-    if df is None or len(df) < start_idx + length + 1:
+    if df is None or len(df) < 170:
+        return None
+    
+    # 自适应：如果数据不够，调整 length
+    if start_idx + length >= len(df):
+        length = len(df) - start_idx - 1
+    if length < 10:
         return None
     
     # 截取数据段（多取60根用于计算指标）
@@ -159,66 +170,90 @@ def get_training_data(code, start_idx, length):
     return records
 
 def get_random_training(length, stock_code=None):
-    """获取随机训练数据"""
+    """获取随机训练数据（自动重试）"""
     stocks = get_stock_list()
     if not stocks:
         return None
     
-    if stock_code:
-        stock = next((s for s in stocks if s['code'] == stock_code), None)
-        if not stock:
+    # 最多重试10次找到数据足够的股票
+    for _ in range(10):
+        if stock_code:
+            stock = next((s for s in stocks if s['code'] == stock_code), None)
+            if not stock:
+                stock = random.choice(stocks)
+        else:
             stock = random.choice(stocks)
-    else:
-        stock = random.choice(stocks)
-    
-    df = load_stock_data(stock['code'])
-    if df is None or len(df) < length + 100:
-        return None
-    
-    max_start = len(df) - length - 1
-    start_idx = random.randint(100, max(100, max_start))
-    
-    klines = get_training_data(stock['code'], start_idx, length)
-    if not klines:
-        return None
-    
-    # 答案（下一根K线）
-    answer_idx = start_idx + length
-    answer = None
-    if answer_idx < len(df):
-        row = df.iloc[answer_idx]
-        prev_close = klines[-1]['close']
-        answer = {
-            "date": str(row['date']),
-            "open": r2(float(row['open'])),
-            "close": r2(float(row['close'])),
-            "high": r2(float(row['high'])),
-            "low": r2(float(row['low'])),
-            "direction": "up" if row['close'] >= prev_close else "down",
-            "change_pct": r2(abs(row['close'] - prev_close) / prev_close * 100)
+        
+        df = load_stock_data(stock['code'])
+        if df is None or len(df) < 170:
+            stock_code = None  # 重试换一个
+            continue
+        
+        # 自适应长度
+        available = len(df) - 160
+        if available <= 0:
+            stock_code = None
+            continue
+        actual_length = min(length, available)
+        
+        max_start = len(df) - actual_length - 1
+        start_idx = random.randint(100, max(100, max_start))
+        
+        klines = get_training_data(stock['code'], start_idx, actual_length)
+        if not klines:
+            stock_code = None
+            continue
+        
+        # 答案（下一根K线）
+        answer_idx = start_idx + actual_length
+        answer = None
+        if answer_idx < len(df):
+            row = df.iloc[answer_idx]
+            prev_close = klines[-1]['close']
+            answer = {
+                "date": str(row['date']),
+                "open": r2(float(row['open'])),
+                "close": r2(float(row['close'])),
+                "high": r2(float(row['high'])),
+                "low": r2(float(row['low'])),
+                "direction": "up" if row['close'] >= prev_close else "down",
+                "change_pct": r2(abs(row['close'] - prev_close) / prev_close * 100)
+            }
+        
+        initial_close = klines[0]['close'] if klines else 0
+        if initial_close == 0 or (isinstance(initial_close, float) and np.isnan(initial_close)):
+            buy_hold_return = 0.0
+        else:
+            buy_hold_return = r2((klines[-1]['close'] - initial_close) / initial_close * 100)
+        
+        return {
+            "code": stock['code'],
+            "klines": klines,
+            "answer": answer,
+            "start_idx": start_idx,
+            "total_len": len(df),
+            "buy_hold_return": buy_hold_return
         }
     
-    return {
-        "code": stock['code'],
-        "klines": klines,
-        "answer": answer,
-        "start_idx": start_idx,
-        "total_len": len(df),
-        "buy_hold_return": r2((klines[-1]['close'] - klines[0]['close']) / klines[0]['close'] * 100) if klines else 0
-    }
+    return None
 
 def get_stock_next_training(stock_code, start_idx, length):
     """获取个股连续训练数据"""
     df = load_stock_data(stock_code)
-    if df is None or len(df) < start_idx + length + 1:
+    if df is None or len(df) < 170:
         return None
     
     # 确保起始索引有效
     if start_idx < 100:
         start_idx = 100
     
-    # 检查是否超出数据范围
+    # 自适应：如果超出范围，调整 start_idx
     if start_idx + length >= len(df):
+        start_idx = max(100, len(df) - length - 1)
+    if start_idx + length >= len(df):
+        # 还是不够，缩短 length
+        length = len(df) - start_idx - 1
+    if length < 10:
         return None
     
     klines = get_training_data(stock_code, start_idx, length)
@@ -241,6 +276,12 @@ def get_stock_next_training(stock_code, start_idx, length):
             "change_pct": r2(abs(row['close'] - prev_close) / prev_close * 100)
         }
     
+    initial_close = klines[0]['close'] if klines else 0
+    if initial_close == 0 or (isinstance(initial_close, float) and np.isnan(initial_close)):
+        buy_hold_return = 0.0
+    else:
+        buy_hold_return = r2((klines[-1]['close'] - initial_close) / initial_close * 100)
+
     return {
         "code": stock_code,
         "klines": klines,
@@ -248,23 +289,25 @@ def get_stock_next_training(stock_code, start_idx, length):
         "start_idx": start_idx,
         "next_idx": start_idx + 1,
         "total_len": len(df),
-        "buy_hold_return": r2((klines[-1]['close'] - klines[0]['close']) / klines[0]['close'] * 100) if klines else 0
+        "buy_hold_return": buy_hold_return
     }
 
 def get_stock_full_data(stock_code, length):
     """获取个股全部数据用于模拟交易"""
     df = load_stock_data(stock_code)
-    if df is None or len(df) < length + 100:
+    if df is None or len(df) < 170:  # 至少需要100前置+70可见
         return None
     
-    # 使用全部数据，从第100根开始（确保指标计算准确）
-    # 留出一些空间用于指标计算
-    start_idx = 100
-    max_length = len(df) - start_idx - 60  # 减去指标计算需要的前置数据
-    if max_length < length:
-        length = max_length
+    # 自适应：根据实际数据量调整 start_idx
+    # 确保至少有 length 条可用数据
+    needed = length + 60  # 需要额外60条用于指标计算
+    start_idx = max(60, len(df) - needed)  # 最小start_idx=60（保证指标计算）
+    available = len(df) - start_idx - 1
+    if available < 10:
+        return None
+    actual_length = min(length, available)
     
-    klines = get_training_data(stock_code, start_idx, length)
+    klines = get_training_data(stock_code, start_idx, actual_length)
     if not klines:
         return None
     
@@ -350,18 +393,32 @@ class KlineHandler(SimpleHTTPRequestHandler):
             if not stock_code:
                 stocks = get_stock_list()
                 if stocks:
-                    stock = random.choice(stocks)
-                    stock_code = stock['code']
+                    # 尝试多次找一个有足够数据的股票
+                    for _ in range(20):
+                        stock = random.choice(stocks)
+                        data = get_stock_full_data(stock['code'], length)
+                        if data and len(data['klines']) >= length * 0.8:
+                            self.send_json(data)
+                            return
+                    # 最后一次不管够不够都返回
+                    if data:
+                        self.send_json(data)
+                    else:
+                        self.send_json({'error': 'No stocks with enough data'})
                 else:
                     self.send_json({'error': 'No stocks available'})
-                    return
+                return
             data = get_stock_full_data(stock_code, length)
             self.send_json(data)
         elif path == '/api/leaderboard':
             self.send_json(load_leaderboard())
         elif path == '/' or path == '/index.html':
-            self.path = '/static/index.html'
-            super().do_GET()
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html; charset=utf-8')
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.end_headers()
+            with open(os.path.join(STATIC_DIR, 'index.html'), 'rb') as f:
+                self.wfile.write(f.read())
         else:
             super().do_GET()
     
