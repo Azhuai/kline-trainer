@@ -278,13 +278,14 @@ document.getElementById('indKDJ').className=si==='kdj'?'mbtn on':'mbtn';
 document.getElementById('indDMA').className=si==='dma'?'mbtn on':'mbtn';
 if(T.d&&T.d.klines){
 var marks=T.buyPoint?[{date:T.buyPoint.date,price:T.buyPoint.price,type:'buy'}]:[];
-drawK(T.ct,T.d.klines,T.si,marks);
+var trainStep=+document.getElementById('sL').value||90;
+drawK(T.ct,T.d.klines,T.si,marks,trainStep);
 }
 // 同步更新个股模式图表
 if(ST.ct&&ST.klines&&ST.klines.length){
 var show=ST.klines.slice(0,ST.curDay);
 var marks=ST.trades.filter(function(t){return t.action==='buy'||t.action==='sell'}).map(function(t){return{date:t.date,price:t.price,type:t.action}});
-drawK(ST.ct,show,T.si,marks);
+drawK(ST.ct,show,T.si,marks,ST.step||90);
 }
 }
 
@@ -299,7 +300,7 @@ window.onresize=function(){T.ct&&T.ct.resize();ST.ct&&ST.ct.resize()}
 }
 
 // ===== 绘制K线（带参考线）=====
-function drawK(ct,ks,si,marks){
+function drawK(ct,ks,si,marks,visibleCount){
 if(!ks||!ks.length)return;
 var dt=ks.map(function(k){return k.date});
 var oh=ks.map(function(k){return[k.open,k.close,k.low,k.high]});
@@ -349,7 +350,7 @@ yAxis:[
 {scale:true,gridIndex:2,splitLine:{show:false},axisLabel:{color:'#8b949e',fontSize:9},axisLine:{lineStyle:{color:'#30363d'}}},
 {scale:true,gridIndex:3,splitLine:{lineStyle:{color:'#21262d',type:'dashed'}},axisLabel:{color:'#8b949e',fontSize:9},axisLine:{lineStyle:{color:'#30363d'}}}
 ],
-dataZoom:[{type:'inside',xAxisIndex:[0,1,2,3],start:dt.length>60?Math.round((1-60/dt.length)*100):0,end:100,minSpan:5}],
+dataZoom:[{type:'inside',xAxisIndex:[0,1,2,3],start:dt.length>(visibleCount||60)?Math.round((1-(visibleCount||60)/dt.length)*100):0,end:100,minSpan:5}],
 series:[
 {name:'K',type:'candlestick',data:oh,xAxisIndex:0,yAxisIndex:0,itemStyle:{color:'#ef4444',color0:'#22c55e',borderColor:'#ef4444',borderColor0:'#22c55e'},markLine:{silent:true,symbol:'none',data:(marks||[]).map(function(m){var cfg={buy:{label:'B',color:'#ef4444'},sell:{label:'S',color:'#22c55e'},add:{label:'加',color:'#f59e0b'},reduce:{label:'减',color:'#06b6d4'},t:{label:'T',color:'#a855f7'}};var c=cfg[m.type]||cfg.buy;return{xAxis:m.date,label:{show:true,formatter:c.label,position:'end',color:c.color,fontSize:12,fontWeight:'bold',offset:[0,4]},lineStyle:{color:'rgba(255,255,255,0.15)',width:1,type:'dotted'}}})}},
 {name:'MA5',type:'line',data:ks.map(function(k){return k.ma5}),smooth:0.3,sampling:'average',symbol:'none',xAxisIndex:0,yAxisIndex:0,itemStyle:{color:'#60a5fa'},lineStyle:{width:1.5}},
@@ -495,7 +496,7 @@ sim.ops.forEach(function(op){
   var mType = op.type==='加仓'?'add':op.type==='减仓'?'reduce':'t';
   marks.push({date:op.date, price:op.price, type:mType});
 });
-drawK(T.ct,d.klines,T.si,marks);
+drawK(T.ct,d.klines,T.si,marks,l);
 
 // 目标模式：更新当前价格显示
 if(T.isTarget){
@@ -563,7 +564,7 @@ try{var opt=T.ct.getOption();if(opt&&opt.dataZoom&&opt.dataZoom[0]){zoomStart=op
 var marks=[{date:T.buyPoint.date,price:T.buyPoint.price,type:'buy'}];
 if(a==='sell')marks.push({date:T.a.date,price:T.a.close,type:'sell'});
 var lk2=T.d.klines[T.d.klines.length-1];var ak={date:T.a.date,open:T.a.open,close:T.a.close,high:T.a.high,low:T.a.low,volume:0,ma5:lk2.ma5,ma10:lk2.ma10,ma20:lk2.ma20,ma30:lk2.ma30,macd_dif:lk2.macd_dif,macd_dea:lk2.macd_dea,macd_bar:lk2.macd_bar,kdj_k:lk2.kdj_k,kdj_d:lk2.kdj_d,kdj_j:lk2.kdj_j,dma:lk2.dma,dma_ama:lk2.dma_ama};
-drawK(T.ct,T.d.klines.concat([ak]),T.si,marks);
+drawK(T.ct,T.d.klines.concat([ak]),T.si,marks,+document.getElementById('sL').value||90);
 // 恢复缩放状态
 if(zoomStart!==0||zoomEnd!==100)T.ct.dispatchAction({type:'dataZoom',start:zoomStart,end:zoomEnd});
 var pe=document.getElementById('dP');
@@ -748,10 +749,10 @@ var showEnd=ST.curDay;
 var show=ST.klines.slice(0,showEnd);
 // 构建买卖标记
 var marks=ST.trades.filter(function(t){return t.action==='buy'||t.action==='sell'}).map(function(t){return{date:t.date,price:t.price,type:t.action}});
-drawK(ST.ct,show,T.si,marks);
-// 目标模式：dataZoom从头开始，确保买入点可见
-if(ST.isTarget&&show.length>60){
-  ST.ct.setOption({dataZoom:[{type:'inside',xAxisIndex:[0,1,2,3],start:0,end:100,minSpan:5}]})
+drawK(ST.ct,show,T.si,marks,ST.step||90);
+// 目标模式：dataZoom从买入点附近开始，确保买入点可见
+if(ST.isTarget&&show.length>(ST.step||90)){
+  ST.ct.setOption({dataZoom:[{type:'inside',xAxisIndex:[0,1,2,3],start:Math.round((1-(ST.step||90)/show.length)*100),end:100,minSpan:5}]})
 }
 if(!show.length)return;
 var lk=show[show.length-1];
@@ -986,6 +987,22 @@ document.getElementById('stTargetTitle').textContent='🎯 目标收益（固定
 }
 document.getElementById('stPBar').style.width='0%';
 document.getElementById('stPTxt').textContent='0/'+ST.maxDays;
+// 目标收益输入实时更新
+if(pctInput){
+  pctInput.oninput=function(){
+    ST.target=+this.value||15;
+    document.getElementById('stTargetPct').textContent='+'+r2(ST.target)+'%';
+  };
+}
+if(daysInput){
+  daysInput.oninput=function(){
+    ST.maxDays=+this.value||30;
+    if(ST.targetMode!=='reach'){
+      document.getElementById('stRemain').textContent=ST.maxDays+'天';
+      document.getElementById('stPTxt').textContent='0/'+ST.maxDays;
+    }
+  };
+}
 setTimeout(function(){
 if(!ST.ct)ST.ct=echarts.init(document.getElementById('chart2'),'dark');
 stockGo()
