@@ -844,18 +844,18 @@ ST.days++;
 if(ST.isTarget)updateStockTarget();
 
 // 判断是否到达最后一个K线
-if(ST.curDay>=ST.total){
-stockFinish()
+if(ST.done||ST.curDay>=ST.total){
+if(!ST.done)stockFinish();
+stockShowChart()
 }else{
-if(!ST.done){
 var _sn=document.getElementById('stNext');if(_sn)_sn.style.display='block';
 var _sn2=document.getElementById('stNext');if(_sn2)_sn2.textContent='➡️ 下一天';
-}
 stockShowChart();
 if(!ST.isTarget)stockUpdateUI()
 }
 }
 function stockFinish(){
+console.log('stockFinish called, ST.done=',ST.done,'isTarget=',ST.isTarget);
 if(ST.done&&ST.isTarget)return; // 目标模式已提交，不覆盖
 ST.done=true;
 if(ST.qty>0){
@@ -932,6 +932,7 @@ if(totalPnl>=ST.target){submitStockTarget(true,totalPnl)}else{submitStockTarget(
 }
 }
 function submitStockTarget(success,pnl){
+console.log('submitStockTarget called:',success,pnl,ST.blind,ST.step);
 var _si=document.getElementById('stockSubmitInfo');if(_si)_si.textContent=(success?'🎉 达标！':'训练结束')+' | 收益: '+r2(pnl)+'% | 目标: +'+r2(ST.target)+'%';
 var _sc=document.getElementById('stockSubmit');if(_sc)_sc.style.display='block';
 window._stockSubmitData={score:Math.round(pnl*100)/100,mode:ST.blind?'targetblind':'target',kl:ST.step||90,blind:ST.blind,total:ST.days,correct:success?1:0,details:{target:ST.target,success:success}};
