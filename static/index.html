@@ -826,7 +826,10 @@ trade.holdPnl=ST.qty>0?(price-ST.avg)/ST.avg*100:0
 ST.trades.push(trade);
 ST.days++;
 ST.curDay++;
-if(ST.curDay>=ST.total){
+if(ST.isTarget)updateStockTarget();
+if(ST.done){
+stockShowChart()
+}else if(ST.curDay>=ST.total){
 stockFinish()
 }else{
 stockShowChart();
@@ -837,17 +840,23 @@ return;
 ST.trades.push(trade);
 ST.days++;
 
+// 先检查目标是否达成（在显示按钮之前）
+if(ST.isTarget)updateStockTarget();
+
 // 判断是否到达最后一个K线
 if(ST.curDay>=ST.total){
 stockFinish()
 }else{
+if(!ST.done){
 var _sn=document.getElementById('stNext');if(_sn)_sn.style.display='block';
 var _sn2=document.getElementById('stNext');if(_sn2)_sn2.textContent='➡️ 下一天';
+}
 stockShowChart();
-stockUpdateUI()
+if(!ST.isTarget)stockUpdateUI()
 }
 }
 function stockFinish(){
+if(ST.done&&ST.isTarget)return; // 目标模式已提交，不覆盖
 ST.done=true;
 if(ST.qty>0){
 var finalPrice=ST.klines[ST.total-1].close;
@@ -915,13 +924,11 @@ document.getElementById('stPTxt').textContent=ST.days+'/'+ST.maxDays;
 }
 if(ST.targetMode==='reach'&&totalPnl>=ST.target&&ST.qty===0){
 ST.done=true;
-setTimeout(function(){submitStockTarget(true,totalPnl);},300);
+submitStockTarget(true,totalPnl);
 }
 if(ST.targetMode!=='reach'&&ST.days>=ST.maxDays){
 ST.done=true;
-setTimeout(function(){
 if(totalPnl>=ST.target){submitStockTarget(true,totalPnl)}else{submitStockTarget(false,totalPnl)}
-},300);
 }
 }
 function submitStockTarget(success,pnl){
