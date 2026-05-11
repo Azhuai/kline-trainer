@@ -283,9 +283,13 @@ drawK(T.ct,T.d.klines,T.si,marks,trainStep);
 }
 // 同步更新个股模式图表
 if(ST.ct&&ST.klines&&ST.klines.length){
-var show=ST.klines.slice(0,ST.curDay);
+var show=ST.klines;
 var marks=ST.trades.filter(function(t){return t.action==='buy'||t.action==='sell'}).map(function(t){return{date:t.date,price:t.price,type:t.action}});
 drawK(ST.ct,show,T.si,marks,ST.step||90);
+var visibleCount=ST.step||90;
+var startPct=ST.curDay>visibleCount?Math.round((ST.curDay-visibleCount)/show.length*100):0;
+var endPct=Math.min(Math.round(ST.curDay/show.length*100),100);
+ST.ct.setOption({dataZoom:[{type:'inside',xAxisIndex:[0,1,2,3],start:startPct,end:endPct,minSpan:2}]})
 }
 }
 
@@ -644,8 +648,8 @@ var _sn=document.getElementById('stNext');if(_sn)_sn.style.display='none';
 var stepVal=ST.isTarget?90:+document.getElementById('stStep').value;
 ST.step=stepVal;
 ST.unlimited=false;
-// 请求更多数据，确保有足够K线用于交易
-var l=ST.unlimited?300:stepVal*3;
+// 固定获取500条K线，确保均线有足够历史数据
+var l=500;
 var iv=document.getElementById('sI').value.trim();
 var params={length:l};
 if(iv)params.code=iv;
@@ -744,23 +748,23 @@ if(ST.isTarget){
 }
 function stockShowChart(){
 if(!ST.ct)ST.ct=echarts.init(document.getElementById('chart2'),'dark');
-// 目标模式显示全部K线，其他模式只显示到当前天
-var showEnd=ST.curDay;
-var show=ST.klines.slice(0,showEnd);
+// 绘制全部K线，均线基于完整数据计算更自然
+var show=ST.klines;
 // 构建买卖标记
 var marks=ST.trades.filter(function(t){return t.action==='buy'||t.action==='sell'}).map(function(t){return{date:t.date,price:t.price,type:t.action}});
 drawK(ST.ct,show,T.si,marks,ST.step||90);
-// 目标模式：dataZoom从买入点附近开始，确保买入点可见
-if(ST.isTarget&&show.length>(ST.step||90)){
-  ST.ct.setOption({dataZoom:[{type:'inside',xAxisIndex:[0,1,2,3],start:Math.round((1-(ST.step||90)/show.length)*100),end:100,minSpan:5}]})
-}
+// dataZoom只显示前curDay条，超出部分左右滑动查看
+var visibleCount=ST.step||90;
+var startPct=ST.curDay>visibleCount?Math.round((ST.curDay-visibleCount)/show.length*100):0;
+var endPct=Math.min(Math.round(ST.curDay/show.length*100),100);
+ST.ct.setOption({dataZoom:[{type:'inside',xAxisIndex:[0,1,2,3],start:startPct,end:endPct,minSpan:2}]})
 if(!show.length)return;
-var lk=show[show.length-1];
-var cp=0;if(show.length>1){var pk=show[show.length-2];cp=(lk.close-pk.close)/pk.close*100}
+var lk=show[ST.curDay-1];
+var cp=0;if(ST.curDay>1){var pk=show[ST.curDay-2];cp=(lk.close-pk.close)/pk.close*100}
 var cs=cp>=0?'+'+r2(cp)+'%':r2(cp)+'%';
 var cc=cp>=0?'#ef4444':'#22c55e';
 document.getElementById('stP').innerHTML=r2(lk.close)+' <span style="color:'+cc+';font-size:.7em">'+cs+'</span>';
-document.getElementById('stD').textContent=show[0].date+' ~ '+show[show.length-1].date+' ('+ST.curDay+'/'+ST.total+')'
+document.getElementById('stD').textContent=show[0].date+' ~ '+show[ST.curDay-1].date+' ('+ST.curDay+'/'+ST.total+')'
 }
 function stockUpdateUI(){
 var lk=ST.klines[ST.curDay-1];

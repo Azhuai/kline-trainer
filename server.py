@@ -298,14 +298,12 @@ def get_stock_full_data(stock_code, length):
     if df is None or len(df) < 170:  # 至少需要100前置+70可见
         return None
     
-    # 自适应：根据实际数据量调整 start_idx
-    # 确保至少有 length 条可用数据
-    needed = length + 60  # 需要额外60条用于指标计算
-    start_idx = max(60, len(df) - needed)  # 最小start_idx=60（保证指标计算）
-    available = len(df) - start_idx - 1
-    if available < 10:
+    # 固定获取500条K线，确保均线等指标有足够历史数据
+    total_need = 500 + 60  # 500条可见 + 60条指标预热
+    start_idx = max(60, len(df) - total_need)
+    actual_length = min(500, len(df) - start_idx - 1)
+    if actual_length < 10:
         return None
-    actual_length = min(length, available)
     
     klines = get_training_data(stock_code, start_idx, actual_length)
     if not klines:
