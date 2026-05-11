@@ -283,21 +283,9 @@ drawK(T.ct,T.d.klines,T.si,marks,trainStep);
 }
 // 同步更新个股模式图表
 if(ST.ct&&ST.klines&&ST.klines.length){
-var show=ST.klines;
+var show=ST.klines.slice(0,ST.curDay);
 var marks=ST.trades.filter(function(t){return t.action==='buy'||t.action==='sell'}).map(function(t){return{date:t.date,price:t.price,type:t.action}});
 drawK(ST.ct,show,T.si,marks,ST.step||90);
-var visibleCount=ST.step||90;
-var startPct=0;
-var endPct=100;
-if(show.length>visibleCount){
-  if(ST.curDay<=visibleCount){
-    startPct=0;endPct=Math.round(visibleCount/show.length*100);
-  }else{
-    startPct=Math.round((ST.curDay-visibleCount)/show.length*100);
-    endPct=Math.round(ST.curDay/show.length*100);
-  }
-}
-ST.ct.setOption({dataZoom:[{type:'inside',xAxisIndex:[0,1,2,3],start:startPct,end:endPct,minSpan:2}]})
 }
 }
 
@@ -663,7 +651,7 @@ var params={length:l};
 if(iv)params.code=iv;
 api('stock_train',params).then(function(d){
 if(!d||!d.klines||!d.klines.length){alert('获取数据失败');return}
-ST.code=d.code;ST.klines=d.klines;ST.total=d.klines.length;
+ST.code=d.code;ST.klines=calcClientIndicators(d.klines);ST.total=ST.klines.length;
 // 初始显示步数条K线，剩余的用于交易
 ST.curDay=Math.min(stepVal,ST.total-1);
 if(ST.curDay<1)ST.curDay=1;
@@ -756,31 +744,17 @@ if(ST.isTarget){
 }
 function stockShowChart(){
 if(!ST.ct)ST.ct=echarts.init(document.getElementById('chart2'),'dark');
-// 绘制全部K线，均线基于完整数据计算更自然
-var show=ST.klines;
-// 构建买卖标记
+// 只显示前curDay条，K线逐条出现
+var show=ST.klines.slice(0,ST.curDay);
 var marks=ST.trades.filter(function(t){return t.action==='buy'||t.action==='sell'}).map(function(t){return{date:t.date,price:t.price,type:t.action}});
 drawK(ST.ct,show,T.si,marks,ST.step||90);
-// dataZoom：显示前curDay条，超过visibleCount时滑动
-var visibleCount=ST.step||90;
-var startPct=0;
-var endPct=100;
-if(show.length>visibleCount){
-  if(ST.curDay<=visibleCount){
-    startPct=0;endPct=Math.round(visibleCount/show.length*100);
-  }else{
-    startPct=Math.round((ST.curDay-visibleCount)/show.length*100);
-    endPct=Math.round(ST.curDay/show.length*100);
-  }
-}
-ST.ct.setOption({dataZoom:[{type:'inside',xAxisIndex:[0,1,2,3],start:startPct,end:endPct,minSpan:2}]})
 if(!show.length)return;
-var lk=show[ST.curDay-1];
-var cp=0;if(ST.curDay>1){var pk=show[ST.curDay-2];cp=(lk.close-pk.close)/pk.close*100}
+var lk=show[show.length-1];
+var cp=0;if(show.length>1){var pk=show[show.length-2];cp=(lk.close-pk.close)/pk.close*100}
 var cs=cp>=0?'+'+r2(cp)+'%':r2(cp)+'%';
 var cc=cp>=0?'#ef4444':'#22c55e';
 document.getElementById('stP').innerHTML=r2(lk.close)+' <span style="color:'+cc+';font-size:.7em">'+cs+'</span>';
-document.getElementById('stD').textContent=show[0].date+' ~ '+show[ST.curDay-1].date+' ('+ST.curDay+'/'+ST.total+')'
+document.getElementById('stD').textContent=show[0].date+' ~ '+show[show.length-1].date+' ('+ST.curDay+'/'+ST.total+')'
 }
 function stockUpdateUI(){
 var lk=ST.klines[ST.curDay-1];
@@ -954,6 +928,32 @@ function submitStockTarget(success,pnl){
 var _si=document.getElementById('stockSubmitInfo');if(_si)_si.textContent=(success?'🎉 达标！':'训练结束')+' | 收益: '+r2(pnl)+'% | 目标: +'+r2(ST.target)+'%';
 var _sc=document.getElementById('stockSubmit');if(_sc)_sc.style.display='block';
 window._stockSubmitData={score:Math.round(pnl*100)/100,mode:ST.blind?'targetblind':'target',kl:ST.step||90,blind:ST.blind,total:ST.days,correct:success?1:0,details:{target:ST.target,success:success}};
+}
+
+// ===== 客户端指标预计算 =====
+function calcClientIndicators(klines){
+  var closes=[],highs=[],lows=[];
+  for(var i=0;i<klines.length;i++){closes.push(klines[i].close);highs.push(klines[i].high);lows.push(klines[i].low)}
+  // MA
+  function ma(arr,n){var r=[];for(var i=0;i<arr.length;i++){var s=0,c=0;for(var j=Math.max(0,i-n+1);j<=i;j++){s+=arr[j];c++}r.push(+(s/c).toFixed(4))}return r}
+  var ma5=ma(closes,5),ma10=ma(closes,10),ma20=ma(closes,20),ma30=ma(closes,30);
+  // EMA
+  function ema(arr,n){var r=[],k=2/(n+1);r[0]=arr[0];for(var i=1;i<arr.length;i++)r.push(+(arr[i]*k+r[i-1]*(1-k)).toFixed(4));return r}
+  var ema12=ema(closes,12),ema26=ema(closes,26);
+  // MACD
+  var dif=[],dea=[],macd_bar=[];for(var i=0;i<closes.length;i++){dif.push(+(ema12[i]-ema26[i]).toFixed(4))}dea=ema(dif,9);for(var i=0;i<closes.length;i++)macd_bar.push(+((dif[i]-dea[i])*2).toFixed(4));
+  // KDJ
+  var k_arr=[],d_arr=[],j_arr=[];for(var i=0;i<closes.length;i++){var n=Math.min(i+1,9);var h=-Infinity,l=Infinity;for(var j=i-n+1;j<=i;j++){if(j>=0){if(highs[j]>h)h=highs[j];if(lows[j]<l)l=lows[j]}}var rsv=h===l?50:(closes[i]-l)/(h-l)*100;k_arr.push(i===0?50:+(2/3*k_arr[i-1]+1/3*rsv).toFixed(4));d_arr.push(i===0?50:+(2/3*d_arr[i-1]+1/3*k_arr[i]).toFixed(4));j_arr.push(+(3*k_arr[i]-2*d_arr[i]).toFixed(4))}
+  // DMA
+  var dma_arr=[],ama_arr=[];for(var i=0;i<closes.length;i++){var s10=i>=9?ma(closes.slice(i-9,i+1),10)[9]:closes[i];var s50=i>=49?ma(closes.slice(i-49,i+1),50)[49]:closes[i];dma_arr.push(+(s10-s50).toFixed(4))}ama_arr=ma(dma_arr,10);
+  // 赋值回klines
+  for(var i=0;i<klines.length;i++){
+    klines[i].ma5=ma5[i];klines[i].ma10=ma10[i];klines[i].ma20=ma20[i];klines[i].ma30=ma30[i];
+    klines[i].macd_dif=dif[i];klines[i].macd_dea=dea[i];klines[i].macd_bar=macd_bar[i];
+    klines[i].kdj_k=k_arr[i];klines[i].kdj_d=d_arr[i];klines[i].kdj_j=j_arr[i];
+    klines[i].dma=dma_arr[i];klines[i].dma_ama=ama_arr[i]
+  }
+  return klines
 }
 
 // ===== 模式切换 =====
