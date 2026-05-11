@@ -826,6 +826,7 @@ trade.holdPnl=ST.qty>0?(price-ST.avg)/ST.avg*100:0
 ST.trades.push(trade);
 ST.days++;
 ST.curDay++;
+console.log('wait action:',{days:ST.days,curDay:ST.curDay,maxDays:ST.maxDays,isTarget:ST.isTarget,targetMode:ST.targetMode});
 if(ST.isTarget)updateStockTarget();
 if(ST.done){
 stockShowChart()
@@ -927,13 +928,16 @@ ST.done=true;
 submitStockTarget(true,totalPnl);
 }
 if(ST.targetMode!=='reach'&&ST.days>=ST.maxDays){
+console.log('Fixed days target reached:',{days:ST.days,maxDays:ST.maxDays,totalPnl:totalPnl,target:ST.target});
 ST.done=true;
 if(totalPnl>=ST.target){submitStockTarget(true,totalPnl)}else{submitStockTarget(false,totalPnl)}
 }
 }
 function submitStockTarget(success,pnl){
-console.log('submitStockTarget called:',success,pnl,ST.blind,ST.step);
+console.log('submitStockTarget called:',{success:success,pnl:pnl,blind:ST.blind,step:ST.step,targetMode:ST.targetMode,days:ST.days,maxDays:ST.maxDays});
 var _si=document.getElementById('stockSubmitInfo');if(_si)_si.textContent=(success?'🎉 达标！':'训练结束')+' | 收益: '+r2(pnl)+'% | 目标: +'+r2(ST.target)+'%';
+var _sc=document.getElementById('stockSubmit');if(_sc)_sc.style.display='block';
+console.log('stockSubmit element:',_sc,'display:',_sc?_sc.style.display:'null');
 var _sc=document.getElementById('stockSubmit');if(_sc)_sc.style.display='block';
 window._stockSubmitData={score:Math.round(pnl*100)/100,mode:ST.blind?'targetblind':'target',kl:ST.step||90,blind:ST.blind,total:ST.days,correct:success?1:0,details:{target:ST.target,success:success}};
 }
