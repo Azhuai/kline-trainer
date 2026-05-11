@@ -287,8 +287,16 @@ var show=ST.klines;
 var marks=ST.trades.filter(function(t){return t.action==='buy'||t.action==='sell'}).map(function(t){return{date:t.date,price:t.price,type:t.action}});
 drawK(ST.ct,show,T.si,marks,ST.step||90);
 var visibleCount=ST.step||90;
-var startPct=ST.curDay>visibleCount?Math.round((ST.curDay-visibleCount)/show.length*100):0;
-var endPct=Math.min(Math.round(ST.curDay/show.length*100),100);
+var startPct=0;
+var endPct=100;
+if(show.length>visibleCount){
+  if(ST.curDay<=visibleCount){
+    startPct=0;endPct=Math.round(visibleCount/show.length*100);
+  }else{
+    startPct=Math.round((ST.curDay-visibleCount)/show.length*100);
+    endPct=Math.round(ST.curDay/show.length*100);
+  }
+}
 ST.ct.setOption({dataZoom:[{type:'inside',xAxisIndex:[0,1,2,3],start:startPct,end:endPct,minSpan:2}]})
 }
 }
@@ -753,10 +761,18 @@ var show=ST.klines;
 // 构建买卖标记
 var marks=ST.trades.filter(function(t){return t.action==='buy'||t.action==='sell'}).map(function(t){return{date:t.date,price:t.price,type:t.action}});
 drawK(ST.ct,show,T.si,marks,ST.step||90);
-// dataZoom只显示前curDay条，超出部分左右滑动查看
+// dataZoom：显示前curDay条，超过visibleCount时滑动
 var visibleCount=ST.step||90;
-var startPct=ST.curDay>visibleCount?Math.round((ST.curDay-visibleCount)/show.length*100):0;
-var endPct=Math.min(Math.round(ST.curDay/show.length*100),100);
+var startPct=0;
+var endPct=100;
+if(show.length>visibleCount){
+  if(ST.curDay<=visibleCount){
+    startPct=0;endPct=Math.round(visibleCount/show.length*100);
+  }else{
+    startPct=Math.round((ST.curDay-visibleCount)/show.length*100);
+    endPct=Math.round(ST.curDay/show.length*100);
+  }
+}
 ST.ct.setOption({dataZoom:[{type:'inside',xAxisIndex:[0,1,2,3],start:startPct,end:endPct,minSpan:2}]})
 if(!show.length)return;
 var lk=show[ST.curDay-1];
