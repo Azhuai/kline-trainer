@@ -336,10 +336,9 @@ def add_score(name, score, mode, kl=60, details=None):
         board[key] = []
     existing = next((e for e in board[key] if e['name'] == name), None)
     if existing:
-        if score > existing['score']:
-            existing['score'] = score
-            existing['time'] = entry['time']
-            existing['details'] = details
+        existing['score'] = score
+        existing['time'] = entry['time']
+        existing['details'] = details
     else:
         board[key].append(entry.copy())
     board[key].sort(key=lambda x: x['score'], reverse=True)
