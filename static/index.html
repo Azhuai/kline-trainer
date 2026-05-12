@@ -183,6 +183,7 @@ select,input{background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:5
 <button class="abtn bw" onclick="stockAct('wait')">➡️ 下一天</button>
 </div>
 <div style="display:flex;gap:6px"><button class="btn bs2" onclick="stockReset()" style="flex:1">🔄 换股</button></div>
+<div id="stLimitTip" style="display:none;text-align:center;padding:6px;border-radius:6px;margin-top:6px;font-size:.8em;font-weight:bold"></div>
 </div>
 <div class="card">
 <div class="card-t">⚙️ 设置</div>
@@ -651,7 +652,7 @@ var params={length:l};
 if(iv)params.code=iv;
 api('stock_train',params).then(function(d){
 if(!d||!d.klines||!d.klines.length){alert('获取数据失败');return}
-ST.code=d.code;ST.klines=calcClientIndicators(d.klines);ST.total=ST.klines.length;
+ST.code=d.code;ST.blindCode=d.blind_code||d.code;ST.klines=calcClientIndicators(d.klines);ST.total=ST.klines.length;
 // 初始显示步数条K线，剩余的用于交易
 ST.curDay=Math.min(stepVal,ST.total-1);
 if(ST.curDay<1)ST.curDay=1;
@@ -756,9 +757,50 @@ var cc=cp>=0?'#ef4444':'#22c55e';
 document.getElementById('stP').innerHTML=r2(lk.close)+' <span style="color:'+cc+';font-size:.7em">'+cs+'</span>';
 document.getElementById('stD').textContent=show[0].date+' ~ '+show[show.length-1].date+' ('+ST.curDay+'/'+ST.total+')'
 }
+// 涨跌停检测（含ST±5%、主板2026-07-16改±20%规则）
+function checkLimit(klines, idx, code){
+  if(idx<1)return{up:false,down:false};
+  var prev=klines[idx-1].close;
+  var cur=klines[idx].close;
+  var date=klines[idx].date; // YYYY-MM-DD
+  // ST检测：涨跌幅卡在±5%附近
+  var chg=Math.abs(cur-prev)/prev;
+  var isST=chg>=0.049&&chg<=0.051;
+  var codeNum=code?code.replace(/^[a-z]+\\./,''):'';
+  var isGEM=/^(300|301|688|689)/.test(codeNum); // 创业板/科创板
+  var isBSE=code?/^bj\\./.test(code):false; // 北交所
+  var pct;
+  if(isST){
+    if(isGEM){pct=0.20}
+    else if(isBSE){pct=0.30}
+    else if(date>='2026-07-06'){pct=0.10}
+    else{pct=0.05}
+  }else if(isGEM){pct=0.20}
+  else if(isBSE){pct=0.30}
+  else{pct=0.10}
+  var upLimit=Math.round(prev*(1+pct)*100)/100;
+  var dnLimit=Math.round(prev*(1-pct)*100)/100;
+  return{up:cur>=upLimit,down:cur<=dnLimit,upLimit:upLimit,dnLimit:dnLimit,isST:isST,pct:pct};
+}
 function stockUpdateUI(){
 var lk=ST.klines[ST.curDay-1];
 var price=lk?lk.close:0;
+
+// 涨跌停按钮状态
+var lim=checkLimit(ST.klines,ST.curDay-1,ST.code);
+var buyBtn=document.querySelector('#vStock .bb');
+var sellBtn=document.querySelector('#vStock .bs');
+if(buyBtn)buyBtn.disabled=lim.up;
+if(sellBtn)sellBtn.disabled=lim.down;
+// 涨跌停提示
+var tipEl=document.getElementById('stLimitTip');
+if(tipEl){
+  var stTag=lim.isST?'⚠️ST ':'';
+  var pctTag='±'+(lim.pct*100)+'%';
+  if(lim.up){tipEl.style.display='block';tipEl.style.background='rgba(239,68,68,0.15)';tipEl.style.color='#ef4444';tipEl.textContent='🔒 '+stTag+'涨停板 '+r2(lim.upLimit)+' ('+pctTag+') | 无法买入'}
+  else if(lim.down){tipEl.style.display='block';tipEl.style.background='rgba(34,197,94,0.15)';tipEl.style.color='#22c55e';tipEl.textContent='🔒 '+stTag+'跌停板 '+r2(lim.dnLimit)+' ('+pctTag+') | 无法卖出'}
+  else{tipEl.style.display='none'}
+}
 
 // 更新持仓信息
 var elAvg=document.getElementById('stAvg');
@@ -807,6 +849,13 @@ if(ST.done)return;
 var lk=ST.klines[ST.curDay-1];
 if(!lk)return;
 var price=lk.close;
+
+// 涨跌停限制
+var lim=checkLimit(ST.klines,ST.curDay-1,ST.code);
+var stTag=lim.isST?'[ST] ':'';
+if(action==='buy'&&lim.up){alert(stTag+'涨停板无法买入！');return}
+if(action==='sell'&&lim.down){alert(stTag+'跌停板无法卖出！');return}
+
 var trade={date:lk.date,action:action,price:price};
 if(action==='buy'){
 if(ST.qty>0){alert('已持仓，请先卖出');return}
@@ -872,6 +921,7 @@ var klVal=ST.unlimited?0:ST.step;
 var catKey=ST.blind?'stockblind':'stock';
 var _si=document.getElementById('stockSubmitInfo');if(_si)_si.textContent='累积收益: '+r2(totalPnl)+'% | 交易天数: '+ST.days;
 var _sc=document.getElementById('stockSubmit');if(_sc)_sc.style.display='block';
+if(ST.blind){document.getElementById('stC').textContent=ST.blindCode;document.getElementById('stB').style.display='none'}
 window._stockSubmitData={score:Math.round(totalPnl*100)/100,mode:catKey,kl:klVal,blind:ST.blind,total:ST.days,correct:ST.wins}
 }
 function stockNext(){
