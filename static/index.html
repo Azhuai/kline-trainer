@@ -254,6 +254,8 @@ select,input{background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:5
 <button class="mbtn" onclick="ldK(120,this)">120</button>
 <button class="mbtn" onclick="ldK(150,this)">150</button>
 <button class="mbtn" onclick="ldK(0,this)">无限期</button>
+<span style="flex:1"></span>
+<button class="mbtn" id="bAllBtn" onclick="toggleAll()" style="background:rgba(88,166,255,0.1);color:#58a6ff">📋 全部记录</button>
 </div>
 <div id="bL"><div class="empty">暂无数据</div></div>
 </div>
@@ -1101,7 +1103,7 @@ go()
 }
 
 // ===== 排行榜 =====
-var Bcat='train';Bkl=90;
+var Bcat='train';Bkl=90;Ball=false;
 function ldB(cat,btn){
 Bcat=cat;
 if(btn){btn.parentElement.querySelectorAll('.mbtn').forEach(function(b){b.classList.remove('on')});btn.classList.add('on')}
@@ -1109,8 +1111,20 @@ ldBShow()
 }
 function ldK(kl,btn){
 Bkl=kl;
+Ball=false;
+updateAllBtn();
 if(btn){document.getElementById('bKL').querySelectorAll('.mbtn').forEach(function(b){b.classList.remove('on')});btn.classList.add('on')}
 ldBShow()
+}
+function toggleAll(){
+Ball=!Ball;
+updateAllBtn();
+ldBShow()
+}
+function updateAllBtn(){
+var btn=document.getElementById('bAllBtn');
+if(Ball){btn.style.background='rgba(88,166,255,0.25)';btn.textContent='📋 显示Top100'}
+else{btn.style.background='rgba(88,166,255,0.1)';btn.textContent='📋 全部记录'}
 }
 function ldBShow(){
 var bl=document.getElementById('bL');
@@ -1118,7 +1132,6 @@ var isTarget=Bcat==='target'||Bcat==='targetblind';
 api('leaderboard').then(function(b){
 var items=[];
 if(Bkl===-1){
-// 全部：合并该模式下所有K线数的记录
 Object.keys(b).forEach(function(k){
 if(k.indexOf(Bcat+'_')===0){
 items=items.concat(b[k])
@@ -1130,11 +1143,13 @@ var key=Bcat+'_'+Bkl;
 items=b[key]||[]
 }
 if(!items.length){bl.innerHTML='<div class="empty">暂无数据</div>';return}
+var total=items.length;
+if(!Ball){items=items.slice(0,100)}
 var header='<div class="ht" style="border-bottom:1px solid #30363d;font-weight:bold;color:#8b949e"><span>序号</span><span>玩家名称</span><span>日期</span><span>收益</span>'+(isTarget?'<span>达标天数</span>':'')+'</div>';
-bl.innerHTML=header+items.map(function(it,i){
+var countInfo='<div style="color:#8b949e;font-size:12px;margin-bottom:6px">'+(Ball?'显示全部 '+total+' 条':'显示前 '+Math.min(100,total)+' 条，共 '+total+' 条')+'</div>';
+bl.innerHTML=countInfo+header+items.map(function(it,i){
 var ds=new Date(it.time).toLocaleDateString('zh-CN');
 var sc=it.score.toFixed(2)+'%';
-var klVal=it.details&&it.details.kl?it.details.kl:'';
 var displayName=it.name||'匿名';
 var daysCol=isTarget&&it.details&&it.details.total?'<span style="color:#f59e0b;font-weight:bold">'+it.details.total+'天</span>':'';
 return '<div class="ht"><span style="color:#58a6ff;font-weight:bold">'+(i+1)+'</span><span>'+displayName+'</span><span style="color:#8b949e">'+ds+'</span><span style="color:#58a6ff;font-weight:bold">'+sc+'</span>'+(isTarget?daysCol:'')+'</div>'
