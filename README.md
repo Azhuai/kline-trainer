@@ -281,26 +281,32 @@ date,open,high,low,close,volume,amount,adjustflag,factor
 
 ## 🔧 配置说明
 
-### 修改数据路径
+编辑 `config.json` 文件：
 
-编辑 `server.py` 中的 `QLIB_DIR`：
-
-```python
-# 默认路径
-QLIB_DIR = os.path.expanduser("~/.qlib/qlib_data/cn_data/stock")
-
-# 自定义路径
-QLIB_DIR = "/path/to/your/qlib_data/stock"
+```json
+{
+  "data_dirs": [
+    "~/.qlib/qlib_data/cn_data/stock",
+    "data/daily"
+  ],
+  "port": 8889
+}
 ```
+
+### 数据目录
+
+`data_dirs` 支持多个数据目录，自动识别两种格式：
+
+| 格式 | 目录结构 | 说明 |
+|------|---------|------|
+| Qlib | `{dir}/{sh\|sz}/{code}/{code}.csv` | Qlib 离线数据 |
+| baostock | `{dir}/{code}.csv` | 脚本下载的日线数据 |
+
+**添加新数据源**：只需在 `data_dirs` 中加入路径，重启服务即可。
 
 ### 修改端口
 
-编辑 `server.py` 最后一行：
-
-```python
-def run_server(port=8889):
-    server = HTTPServer(('0.0.0.0', port), KlineHandler)
-```
+修改 `config.json` 中的 `port` 字段。
 
 ## 📱 使用技巧
 
@@ -377,6 +383,7 @@ MIT License
 - ✅ 北交所ST股：±30%（与普通股相同）
 - ✅ 涨跌停状态提示（红色涨停/绿色跌停）
 - ✅ 个股盲测结束时揭示真实股票代码
+- ✅ **数据源配置化** - 新增 `config.json`，支持多数据目录，自动识别 Qlib/baostock 格式
 
 **修复**：
 - 🐛 修复个股盲测模式提交成绩后股票代码不显示的问题

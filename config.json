@@ -1,0 +1,7 @@
+{
+  "data_dirs": [
+    "~/.qlib/qlib_data/cn_data/stock",
+    "data/daily"
+  ],
+  "port": 8889
+}
