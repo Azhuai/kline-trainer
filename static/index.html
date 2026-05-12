@@ -254,8 +254,7 @@ select,input{background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:5
 <button class="mbtn" onclick="ldK(120,this)">120</button>
 <button class="mbtn" onclick="ldK(150,this)">150</button>
 <button class="mbtn" onclick="ldK(0,this)">无限期</button>
-<span style="flex:1"></span>
-<button class="mbtn" id="bAllBtn" onclick="toggleAll()" style="background:rgba(88,166,255,0.1);color:#58a6ff">📋 全部记录</button>
+
 </div>
 <div id="bL"><div class="empty">暂无数据</div></div>
 </div>
@@ -1103,61 +1102,66 @@ go()
 }
 
 // ===== 排行榜 =====
-var Bcat='train';Bkl=90;Ball=false;
+var Bcat='train';Bkl=90;Bpage=0;Bdata=null;
 function ldB(cat,btn){
-Bcat=cat;
+Bcat=cat;Bpage=0;Bdata=null;
 if(btn){btn.parentElement.querySelectorAll('.mbtn').forEach(function(b){b.classList.remove('on')});btn.classList.add('on')}
 ldBShow()
 }
 function ldK(kl,btn){
-Bkl=kl;
-Ball=false;
-updateAllBtn();
+Bkl=kl;Bpage=0;Bdata=null;
 if(btn){document.getElementById('bKL').querySelectorAll('.mbtn').forEach(function(b){b.classList.remove('on')});btn.classList.add('on')}
 ldBShow()
 }
-function toggleAll(){
-Ball=!Ball;
-updateAllBtn();
-ldBShow()
-}
-function updateAllBtn(){
-var btn=document.getElementById('bAllBtn');
-if(Ball){btn.style.background='rgba(88,166,255,0.25)';btn.textContent='📋 显示Top100'}
-else{btn.style.background='rgba(88,166,255,0.1)';btn.textContent='📋 全部记录'}
-}
+function ldBPage(p){Bpage=p;ldBRender()}
 function ldBShow(){
 var bl=document.getElementById('bL');
-var isTarget=Bcat==='target'||Bcat==='targetblind';
 api('leaderboard').then(function(b){
 var items=[];
 if(Bkl===-1){
 Object.keys(b).forEach(function(k){
-if(k.indexOf(Bcat+'_')===0){
-items=items.concat(b[k])
-}
+if(k.indexOf(Bcat+'_')===0){items=items.concat(b[k])}
 })
 items.sort(function(a,b){return b.score-a.score})
 }else{
-var key=Bcat+'_'+Bkl;
-items=b[key]||[]
+items=b[Bcat+'_'+Bkl]||[]
 }
+Bdata=items;Bpage=0;
+ldBRender()
+}).catch(function(e){
+bl.innerHTML='<div class="empty">加载失败</div>'
+})
+}
+function ldBRender(){
+var bl=document.getElementById('bL');
+var isTarget=Bcat==='target'||Bcat==='targetblind';
+var items=Bdata||[];
 if(!items.length){bl.innerHTML='<div class="empty">暂无数据</div>';return}
 var total=items.length;
-if(!Ball){items=items.slice(0,100)}
+var pages=Math.ceil(total/100);
+if(Bpage>=pages)Bpage=pages-1;
+if(Bpage<0)Bpage=0;
+var start=Bpage*100;
+var pageItems=items.slice(start,start+100);
 var header='<div class="ht" style="border-bottom:1px solid #30363d;font-weight:bold;color:#8b949e"><span>序号</span><span>玩家名称</span><span>日期</span><span>收益</span>'+(isTarget?'<span>达标天数</span>':'')+'</div>';
-var countInfo='<div style="color:#8b949e;font-size:12px;margin-bottom:6px">'+(Ball?'显示全部 '+total+' 条':'显示前 '+Math.min(100,total)+' 条，共 '+total+' 条')+'</div>';
-bl.innerHTML=countInfo+header+items.map(function(it,i){
+var rows=pageItems.map(function(it,i){
+var rank=start+i+1;
 var ds=new Date(it.time).toLocaleDateString('zh-CN');
 var sc=it.score.toFixed(2)+'%';
 var displayName=it.name||'匿名';
 var daysCol=isTarget&&it.details&&it.details.total?'<span style="color:#f59e0b;font-weight:bold">'+it.details.total+'天</span>':'';
-return '<div class="ht"><span style="color:#58a6ff;font-weight:bold">'+(i+1)+'</span><span>'+displayName+'</span><span style="color:#8b949e">'+ds+'</span><span style="color:#58a6ff;font-weight:bold">'+sc+'</span>'+(isTarget?daysCol:'')+'</div>'
-}).join('')
-}).catch(function(e){
-bl.innerHTML='<div class="empty">加载失败</div>';
-console.error('Leaderboard error:',e)
-})
+return '<div class="ht"><span style="color:#58a6ff;font-weight:bold">'+rank+'</span><span>'+displayName+'</span><span style="color:#8b949e">'+ds+'</span><span style="color:#58a6ff;font-weight:bold">'+sc+'</span>'+(isTarget?daysCol:'')+'</div>'
+}).join('');
+var nav='';
+if(pages>1){
+nav='<div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding:8px 0;border-top:1px solid #30363d">';
+nav+='<span style="color:#8b949e;font-size:12px">共 '+total+' 条 · 第 '+(Bpage+1)+'/'+pages+' 页</span>';
+nav+='<div style="display:flex;gap:6px">';
+if(Bpage>0)nav+='<button class="mbtn" onclick="ldBPage('+(Bpage-1)+')">◀ 上一页</button>';
+if(Bpage<pages-1)nav+='<button class="mbtn" onclick="ldBPage('+(Bpage+1)+')">下一页 ▶</button>';
+nav+='</div></div>'
+}
+bl.innerHTML=header+rows+nav
 }
 // 更新目标UI
 function updateTargetUI(pnl){
